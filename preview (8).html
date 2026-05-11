@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather Command Center</title>
+
+<style>
+body {
+    margin: 0;
+    font-family: system-ui, Arial, sans-serif;
+    background: #0b0f14;
+    color: #e6edf3;
+}
+
+/* HEADER */
+header {
+    padding: 14px;
+    text-align: center;
+    background: #111826;
+    border-bottom: 1px solid #1f2a37;
+}
+
+header h1 {
+    margin: 0;
+    color: #58a6ff;
+    font-size: 22px;
+}
+
+.subtitle {
+    font-size: 12px;
+    color: #8b949e;
+}
+
+/* DANGER BAR */
+#dangerBar {
+    text-align: center;
+    padding: 10px;
+    font-size: 14px;
+    background: #0f1623;
+    border-bottom: 1px solid #1f2a37;
+}
+
+/* TICKER */
+.ticker {
+    background: #0f1623;
+    border-bottom: 1px solid #1f2a37;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.ticker span {
+    display: inline-block;
+    padding-left: 100%;
+    animation: scroll 18s linear infinite;
+    color: #f85149;
+    font-size: 13px;
+}
+
+@keyframes scroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+}
+
+/* GRID */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+    gap: 14px;
+    padding: 14px;
+}
+
+.card {
+    background: #111826;
+    border: 1px solid #1f2a37;
+    border-radius: 14px;
+    overflow: hidden;
+}
+
+.card h3 {
+    margin: 0;
+    padding: 10px 12px;
+    background: #0f1623;
+    border-bottom: 1px solid #1f2a37;
+    color: #7cc4ff;
+    font-size: 14px;
+}
+
+iframe {
+    width: 100%;
+    height: 520px;
+    border: none;
+    background: black;
+}
+
+/* EMERGENCY OVERLAY */
+#alertOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    background: red;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+#alertOverlay.active {
+    animation: flash 0.4s infinite;
+}
+
+@keyframes flash {
+    0% { opacity: 0; }
+    50% { opacity: 0.35; }
+    100% { opacity: 0; }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h1>Weather Command Center</h1>
+    <div class="subtitle">Live radar • GPS alerts • Tornado detection • National news</div>
+</header>
+
+<!-- DANGER INDEX -->
+<div id="dangerBar">
+    Danger Index: <span id="dangerLevel">0</span>/5
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+    <span id="tickerText">Initializing weather intelligence system...</span>
+</div>
+
+<!-- OVERLAY -->
+<div id="alertOverlay"></div>
+
+<!-- SOUNDS -->
+<audio id="sirenTornado"
+src="https://actions.google.com/sounds/v1/alarms/emergency_siren.ogg"
+preload="auto"></audio>
+
+<audio id="sirenSevere"
+src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg"
+preload="auto"></audio>
+
+<audio id="sirenFlood"
+src="https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg"
+preload="auto"></audio>
+
+<!-- DASHBOARD -->
+<div class="grid">
+
+    <div class="card">
+        <h3>Live Radar</h3>
+        <iframe src="https://embed.windy.com/embed2.html?lat=29.97&lon=-98.90&zoom=6&level=surface&overlay=radar&product=radar&menu=&message=true"></iframe>
+    </div>
+
+    <div class="card">
+        <h3>Severe Storms</h3>
+        <iframe src="https://embed.windy.com/embed2.html?lat=31&lon=-99&zoom=5&level=surface&overlay=thunder&product=ecmwf&menu=&message=true"></iframe>
+    </div>
+
+    <div class="card">
+        <h3>Lightning Detection</h3>
+        <iframe src="https://embed.windy.com/embed2.html?lat=29.97&lon=-98.90&zoom=5&level=surface&overlay=lightning&product=lightning&menu=&message=true"></iframe>
+    </div>
+
+    <div class="card">
+        <h3>NWS Forecast Discussion (EWX)</h3>
+        <iframe src="https://forecast.weather.gov/product.php?site=EWX&issuedby=EWX&product=AFD&format=TXT&version=1&glossary=0"></iframe>
+    </div>
+
+</div>
+
+<script>
+
+let alertsEnabled = false;
+document.body.addEventListener("click", () => alertsEnabled = true);
+
+/* NATIONAL NEWS */
+const nationalNews = [
+    "📰 U.S. federal agencies issue updated emergency guidance",
+    "📰 National infrastructure monitoring elevated across multiple regions",
+    "📰 Weather service expands severe outlook zones",
+    "📰 Emergency management agencies prepare for storm season surge",
+    "📰 National alert systems undergoing system-wide updates"
+];
+
+/* DANGER LEVEL */
+function getDangerLevel(event) {
+    const e = event.toLowerCase();
+
+    if (e.includes("tornado warning")) return 5;
+    if (e.includes("tornado watch")) return 4;
+    if (e.includes("severe thunderstorm warning")) return 4;
+    if (e.includes("flash flood warning")) return 3;
+    if (e.includes("flood warning")) return 3;
+    if (e.includes("severe thunderstorm watch")) return 2;
+
+    return 1;
+}
+
+/* UI UPDATE */
+function updateDanger(level) {
+    const el = document.getElementById("dangerLevel");
+    el.textContent = level;
+
+    const colors = {
+        5: "#ff0000",
+        4: "#ff4d00",
+        3: "#ffb300",
+        2: "#4da3ff",
+        1: "#00c853"
+    };
+
+    el.style.color = colors[level] || "#00c853";
+}
+
+/* SOUND ENGINE */
+function playSound(level) {
+    if (!alertsEnabled) return;
+
+    if (level === 5) {
+        document.getElementById("sirenTornado").play().catch(()=>{});
+    } else if (level === 4) {
+        document.getElementById("sirenSevere").play().catch(()=>{});
+    } else if (level === 3) {
+        document.getElementById("sirenFlood").play().catch(()=>{});
+    }
+}
+
+/* FLASH */
+function flash() {
+    const o = document.getElementById("alertOverlay");
+    o.classList.add("active");
+    setTimeout(() => o.classList.remove("active"), 12000);
+}
+
+/* GPS */
+async function getLocation() {
+    return new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej)
+    );
+}
+
+/* NWS */
+async function fetchAlerts(lat, lon) {
+    const res = await fetch(
+        `https://api.weather.gov/alerts/active?point=${lat},${lon}`
+    );
+    const data = await res.json();
+    return data.features || [];
+}
+
+/* CORE ENGINE */
+function processAlerts(alerts) {
+
+    let messages = [];
+    let highest = 1;
+
+    alerts.forEach(a => {
+
+        const p = a.properties;
+        const level = getDangerLevel(p.event);
+
+        if (level > highest) highest = level;
+
+        messages.push(`📢 ${p.event}: ${p.areaDesc}`);
+
+        playSound(level);
+        flash();
+    });
+
+    updateDanger(highest);
+
+    /* ADD NATIONAL NEWS */
+    messages.push(
+        nationalNews[Math.floor(Math.random() * nationalNews.length)]
+    );
+
+    let i = 0;
+    const ticker = document.getElementById("tickerText");
+
+    setInterval(() => {
+        ticker.textContent = messages[i % messages.length];
+        i++;
+    }, 5000);
+}
+
+/* START */
+async function start() {
+
+    try {
+        const pos = await getLocation();
+
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+
+        async function update() {
+            const alerts = await fetchAlerts(lat, lon);
+            processAlerts(alerts);
+        }
+
+        update();
+        setInterval(update, 60000);
+
+    } catch (e) {
+        document.getElementById("tickerText").textContent =
+            "⚠️ Location blocked — Weather alerts not avalable ";
+    }
+}
+
+start();
+
+</script>
+
+</body>
+</html>
